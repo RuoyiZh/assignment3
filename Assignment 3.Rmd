@@ -34,7 +34,7 @@ Since our data represnts every time a student makes a comment there are multiple
 
 EDGE <- count(D2, comment.to, comment.from)
 
-names(EDGE) <- c("from", "to", "count")
+names(EDGE) <- c("to","from", "count")
 
 ```
 
@@ -63,13 +63,13 @@ VERTEX$gender.from <- ifelse(is.na(VERTEX$gender.from) == TRUE, as.factor(as.cha
 VERTEX$major.from <- ifelse(is.na(VERTEX$major.from) == TRUE, as.factor(as.character(VERTEX$major.to)), as.factor(as.character(VERTEX$major.from)))
 
 #Remove redundant gender and major variables
-VERTEX <- select(VERTEX, id, gender.from, major.from)
+VERTEX1 <- select(VERTEX, id, gender.from, major.from)
 
 #rename variables
-names(VERTEX) <- c("id", "gender", "major")
+names(VERTEX1) <- c("id", "gender", "major")
 
 #Remove all the repeats so that we just have a list of each student and their characteristics
-VERTEX <- unique(VERTEX)
+VERTEX1 <- unique(VERTEX1)
 
 ```
 
@@ -82,19 +82,19 @@ library(igraph)
 
 #First we will make an object that contains the graph information using our two dataframes EDGE and VERTEX. Notice that we have made "directed = TRUE" - our graph is directed since comments are being given from one student to another.
 
-g <- graph.data.frame(EDGE, directed=TRUE, vertices=VERTEX)
+g <- graph.data.frame(EDGE, directed=TRUE, vertices=VERTEX1)
 
 #Now we can plot our graph using the force directed graphing technique - our old friend Fruchertman-Reingold!
 
 plot(g,layout=layout.fruchterman.reingold)
 
-#There are many ways to change the attributes of the graph to represent different characteristics of the newtork. For example, we can color the nodes according to gender.
+#There are many ways to change the attributes of the graph to represent different characteristics of the network. For example, we can color the nodes according to gender.
 
-plot(g,layout=layout.fruchterman.reingold, vertex.color=VERTEX$gender)
+plot(g,layout=layout.fruchterman.reingold, vertex.color=VERTEX1$gender)
 
 #We can change the thickness of the edge according to the number of times a particular student has sent another student a comment.
 
-plot(g,layout=layout.fruchterman.reingold, vertex.color=VERTEX$gender, edge.width=EDGE$count)
+plot(g,layout=layout.fruchterman.reingold, vertex.color=VERTEX1$gender, edge.width=EDGE$count)
 
 ````
 
@@ -103,20 +103,86 @@ plot(g,layout=layout.fruchterman.reingold, vertex.color=VERTEX$gender, edge.widt
 In Part II your task is to [look up](http://igraph.org/r/) in the igraph documentation and modify the graph above so that:
 
 * Ensure that sizing allows for an unobstructed view of the network features (For example, the arrow size is smaller)
+```{r}
+plot(g,layout=layout.fruchterman.reingold, vertex.color=VERTEX1$gender, edge.width=EDGE$count, edge.arrow.size=0.5, vertex.size=15, vertex.label.cex=0.8) 
+```
 * The vertices are colored according to major
-* The vertices are sized according to the number of comments they have recieved
+```{r}
+plot(g,layout=layout.fruchterman.reingold, vertex.color=VERTEX1$major, edge.width=EDGE$count, edge.arrow.size=0.5, vertex.size=15, vertex.label.cex=0.8) 
+```
+
+* The vertices are sized according to the number of comments they have received
+```{r}
+VERTEX$gender.to <- ifelse(is.na(VERTEX$gender.to) == TRUE, as.factor(as.character(VERTEX$gender.from)), as.factor(as.character(VERTEX$gender.to)))
+
+VERTEX$major.to <- ifelse(is.na(VERTEX$major.to) == TRUE, as.factor(as.character(VERTEX$major.from)), as.factor(as.character(VERTEX$major.to)))
+
+VERTEX2 <- select(VERTEX, id, gender.to, major.to)
+names(VERTEX2) <- c("id", "gender", "major")
+VERTEX2 <- unique(VERTEX2)
+library(igraph)
+g1 <- graph.data.frame(EDGE, directed=TRUE, vertices=VERTEX2)
+plot(g1,layout=layout.fruchterman.reingold)
+plot(g1,layout=layout.fruchterman.reingold, vertex.color=VERTEX2$major)
+plot(g1,layout=layout.fruchterman.reingold, vertex.color=VERTEX2$major, vertex.size=EDGE$count, edge.arrow.size=0.3, vertex.label.dist=2)
+```
+
 
 ## Part III
 
 Now practice with data from our class. This data is real class data directly exported from Qualtrics and you will need to wrangle it into shape before you can work with it. Import it into R as a data frame and look at it carefully to identify problems.
 
 Please create a **person-network** with the data set hudk4050-classes.csv. To create this network you will need to create a person-class matrix using the tidyr functions and then create a person-person matrix using `t()`. You will then need to plot a matrix rather than a to/from data frame using igraph.
+```{r}
+library(tidyr)
+library(dplyr)
+library(stringr)
+library(igraph)
+DF1 <- read.csv("hudk4050-classes.csv", header = TRUE, stringsAsFactors = FALSE)
+colnames(DF1) <- DF1[1,]
+DF1<- DF1[c(-2),]
+DF1<- DF1[c(-1),]
+DF1 <- select(DF1, 1:8)
+DF1 <- unite(DF1, "name", 'First Name', 'Last Name', sep = " ")
+DF1$name <- str_replace(DF1$name, "`", "")
+DF1$name <- str_to_title(DF1$name)
+DF1 <- DF1 %>% mutate_at(2:7, list(toupper))
+DF1 <- DF1 %>% mutate_at(2:7, str_replace_all, " ", "")
+
+DF2 <- DF1 %>% gather(label, class, 2:7, na.rm = TRUE, convert = FALSE) %>% select(name, class)
+DF2$count <- 1
+DF2 <- filter(DF2, class != "")
+DF2 <- unique(DF2)
+DF2 <- spread(DF2, class, count)
+rownames(DF2) <- DF2$name
+DF2 <- select(DF2, -name, -HUDK4050)
+DF2[is.na(DF2)] <- 0
+DF3 <- as.matrix(DF2)
+DF3 <- DF3 %*% t(DF3)
+g <- graph.adjacency(DF3, mode = "undirected", diag = FALSE)
+plot(g, layout = layout.fruchterman.reingold, vertex.size = 4, vertex.label.cex = 0.8, vertex.label.color = "purple",
+     vertex.color = "grey")
+```
+
 
 Once you have done this, also [look up](http://igraph.org/r/) how to generate the following network metrics:
 
 * Betweeness centrality and dregree centrality. **Who is the most central person in the network according to these two metrics? Write a sentence or two that describes your interpretation of these metrics**
+```{r}
+sort(degree(g), decreasing = TRUE)
+# Guoliang Xu, Hangshi Jin, Jiaao  Qi, Jiacong Zhu, Jiahao Shen, Wenqi Gao, Xiyun  Zhang, Yingxin Xie
+sort(betweenness(g), decreasing = TRUE)
+# Yifei Zhang
+```
+
 
 * Color the nodes according to interest. Are there any clusters of interest that correspond to clusters in the network? Write a sentence or two describing your interpetation.
+```{r}
+plot(g, layout = layout.fruchterman.reingold, vertex.size = 4, vertex.label.cex = 0.8, vertex.label.color = "purple",
+     vertex.color = "pink")
+# There is no salient correspondence between interest and clusters in the network. The same interest areas (such as prediction modeling and social network analysis are included in all the clusters.)
+```
+
 
 ### To Submit Your Assignment
 
